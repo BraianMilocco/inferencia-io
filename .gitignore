@@ -1,0 +1,24 @@
+# Add all gited files and directories you want to ignore below
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+instance/
+db.sqlite3
+/media/
+/staticfiles/
+.vscode/
+.idea/
+.DS_Store
+*.log
+*.sqlite3
+*.env
+*.db
+*.pot
+*.mo
+coverage/
+htmlcov/
+.tox/
+.pytest_cache/
+migrations/
