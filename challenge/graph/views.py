@@ -49,7 +49,7 @@ class VideoAnalysisYoutubeView(APIView):
                 video_analysis.save()
                 return Response(
                     {
-                        "error": "Error durante el análisis 2",
+                        "error": "Error while analyzing video",
                         "details": result["errors"]
                     },
                     status=status.HTTP_400_BAD_REQUEST
