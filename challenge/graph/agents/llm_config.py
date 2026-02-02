@@ -1,5 +1,8 @@
+import logging
 from challenge_inferencia.settings import LLM_API_KEY, LLM_MODEL_NAME
 from langchain_openai import ChatOpenAI
+
+logger = logging.getLogger(__name__)
 
 def get_llm() -> ChatOpenAI:
     """    
@@ -8,12 +11,14 @@ def get_llm() -> ChatOpenAI:
     It uses OpenAI's ChatOpenAI model with specified parameters.
     """
     if LLM_API_KEY is not None:
+        logger.info("Initializing LLM", extra={"model": LLM_MODEL_NAME})
         return ChatOpenAI(
             model=LLM_MODEL_NAME,
             temperature=0,
             api_key=LLM_API_KEY
         )
     else:
+        logger.error("LLM_API_KEY not configured")
         raise ValueError(
             "No API key found. "
             "Configure LLM_API_KEY in the .env file."

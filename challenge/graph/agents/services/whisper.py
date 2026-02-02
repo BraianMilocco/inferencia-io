@@ -1,12 +1,16 @@
 import os
+import logging
 import tempfile
 from pydantic import BaseModel
 from typing import Dict, Optional
 import yt_dlp
+
 from openai import OpenAI
 
 # Get from settings or environment
 from challenge_inferencia.settings import LLM_API_KEY
+
+logger = logging.getLogger(__name__)
 
 class WhisperMetadata(BaseModel):
     title: Optional[str]
@@ -50,6 +54,7 @@ class WhisperTranscriptionService:
     def __init__(self):
         self.client = OpenAI(api_key=LLM_API_KEY)
         self.temp_dir = tempfile.gettempdir()
+        logger.info("WhisperTranscriptionService initialized", extra={"temp_dir": self.temp_dir})
 
     def delete_temp_file(self, file_path: str):
         """
@@ -58,8 +63,9 @@ class WhisperTranscriptionService:
         Args:
             file_path (str): Path to the file
         """
-        if os.path.exists(file_path):
+        if file_path and os.path.exists(file_path):
             os.remove(file_path)
+            logger.info("Temporary file removed", extra={"file_path": file_path})
 
     def download_audio(self, video_url: str) -> DownloadAudioResponse:
         """
@@ -85,16 +91,24 @@ class WhisperTranscriptionService:
             'no_warnings': True,
         }
         
+        logger.info("Starting audio download", extra={"video_url": video_url})
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
-                print(f"Audio downloaded to {audio_path}")
-                print(f"Video info: {info}")
+                logger.info(f"Audio downloaded - info {info.keys()}", extra={"audio_path": audio_path})
                 # Extract metadata
+                logger.info("EXTRACTING METADATA")
+                keys = ['title', 'duration', 'language', 'language_preference', 'subtitles', 'ext', 'description', "duration_string", 'has_drm', 'preference']
+                for key in keys:
+                    logger.info(f"{key}: {info.get(key)}")
+                
+                language = info.get('language', None)
+                if language is not None:
+                    language = language.lower().split('-')[0].strip()
                 metadata = {
                     'title': info.get('title', ''),
                     'duration_seconds': info.get('duration', 0),
-                    'language_code': info.get('language', None),
+                    'language_code': language,
                 }
                 
             return DownloadAudioResponse(
@@ -103,8 +117,16 @@ class WhisperTranscriptionService:
                 success=True,
                 error=None
             )
-            
+        except yt_dlp.utils.DownloadError as e:
+            logger.exception("DownloadError while downloading audio", extra={"video_url": video_url})
+            return DownloadAudioResponse(
+                audio_path=None,
+                metadata=None,
+                success=False,
+                error=f"DownloadError while downloading audio: {str(e)}"
+            )
         except Exception as e:
+            logger.exception("Error while downloading audio", extra={"video_url": video_url})
             return DownloadAudioResponse(
                 audio_path=None,
                 metadata=None,
@@ -123,6 +145,7 @@ class WhisperTranscriptionService:
             TranscriptAudioResponse: The response object containing the transcript, success status, and error message if any
         """
 
+        logger.info("Starting transcription", extra={"audio_path": audio_path})
         try:
             with open(audio_path, 'rb') as audio_file:
                 transcript = self.client.audio.transcriptions.create(
@@ -131,6 +154,7 @@ class WhisperTranscriptionService:
                     response_format="text"
                 )
             
+            logger.info("Transcription finished")
             return TranscriptAudioResponse(
                 transcript=transcript,
                 success=True,
@@ -138,6 +162,7 @@ class WhisperTranscriptionService:
             )
             
         except Exception as e:
+            logger.exception("Error while transcribing audio", extra={"audio_path": audio_path})
             return TranscriptAudioResponse(
                 transcript=None,
                 success=False,
@@ -158,10 +183,13 @@ class WhisperTranscriptionService:
             WhisperResponse: The response object containing the transcript and metadata
         """
         # Download audio
+        logger.info("Getting transcript", extra={"video_url": video_url})
         download_response = self.download_audio(video_url)
         if not download_response.success:
             # Delete temp file if exists
-            self.delete_temp_file(download_response.audio_path)
+            if download_response.audio_path:
+                self.delete_temp_file(download_response.audio_path)
+            logger.error("Download failed", extra={"error": download_response.error})
             return WhisperResponse(
                 transcript=None,
                 metadata=None,
@@ -170,6 +198,8 @@ class WhisperTranscriptionService:
 
         # Transcript audio
         transcript_response = self.transcribe_audio(download_response.audio_path)
+        if transcript_response.error:
+            logger.error("Transcription failed", extra={"error": transcript_response.error})
         
         return WhisperResponse(
             transcript=transcript_response.transcript,

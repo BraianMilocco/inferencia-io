@@ -28,6 +28,7 @@ services:
       DEBUG: ${DEBUG}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL_NAME: ${LLM_MODEL_NAME}
+      LOG_LEVEL: ${LOG_LEVEL}
     volumes:
       - .:/app
     ports:

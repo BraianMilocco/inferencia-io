@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -10,6 +11,8 @@ from graph.agents.prompts import (
     node_2_system_message, node_2_human_message,
     node_3_system_message, node_3_human_message
 )
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -37,7 +40,6 @@ class KeyPointsExtraction(BaseModel):
 # ============================================================================
 # NODE 1: EXTRACT
 # ============================================================================
-
 def extraction_node(state: VideoAnalysisState) -> Dict:
     """
     Node 1: Extracts the transcription of the video
@@ -50,22 +52,31 @@ def extraction_node(state: VideoAnalysisState) -> Dict:
         Dict: Result containing transcript, metadata, error, and status
     """
     video_url = state["video_url"]
+    logger.info("Extraction node started", extra={"video_url": video_url})
 
     service = WhisperTranscriptionService()
     
     result: WhisperResponse = service.get_transcript(video_url)
-    
+
+    if result.error:
+        return {
+            "errors": [result.error],
+            "status": "failed"
+        }
+
+    metadata = result.metadata
     return {
         "transcript": result.transcript,
-        "metadata": result.metadata,
-        "error": result.error,
-        "status": "extracted" if result.error is None else "failed"
+        "metadata": metadata,
+        "title": metadata.title if metadata else "",
+        "duration_seconds": metadata.duration_seconds if metadata else 0,
+        "language_code": metadata.language_code if metadata else "unknown",
+        "status": "extracted"
     }
 
 # ============================================================================
 # NODE 2: SENTIMENT AND TONE ANALYSIS
 # ============================================================================
-
 def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
     """
     Node 2: Analyzes the sentiment and tone of the content
@@ -76,11 +87,13 @@ def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
         Dict: Result containing sentiment, score, tone, error, and status
     """
     transcript = state.get("transcript")
+    logger.info("Sentiment analysis node started")
     
     # Si no hay transcripción, saltar este nodo
     if not transcript:
+        logger.warning("Sentiment analysis skipped: no transcript")
         return {
-            "error": "No transcript available",
+            "errors": ["No transcript available"],
             "status": "skipped"
         }
     
@@ -98,10 +111,12 @@ def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
         # Limit the transcript to avoid exceeding token limits
         truncated_transcript = transcript[:5000] if len(transcript) > 5000 else transcript
         
+        logger.info("Invoking sentiment analysis LLM", extra={"transcript_length": len(truncated_transcript)})
         result = chain.invoke({
             "transcript": truncated_transcript,
             "format_instructions": parser.get_format_instructions()
         })
+        logger.info("Sentiment analysis completed")
         
         return {
             "sentiment": result.sentiment,
@@ -111,8 +126,9 @@ def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
         }
         
     except Exception as e:
+        logger.exception("Error analyzing sentiment")
         return {
-            "error": f"Error analyzing sentiment: {str(e)}",
+            "errors": [f"Error analyzing sentiment: {str(e)}"],
             "status": "failed"
         }       
 
@@ -120,7 +136,6 @@ def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
 # ============================================================================
 # NODE 3: STRUCTURING AND KEY POINTS EXTRACTION
 # ============================================================================
-
 def structuring_node(state: VideoAnalysisState) -> Dict:
     """
     Node 3: Extracts the 3 key points and structures the final result
@@ -132,10 +147,12 @@ def structuring_node(state: VideoAnalysisState) -> Dict:
         Dict: Result containing final structured data or error and status
     """
     transcript = state.get("transcript")
+    logger.info("Structuring node started")
     
     if not transcript:
+        logger.warning("Structuring skipped: no transcript")
         return {
-            "error": "No transcript available",
+            "errors": ["No transcript available"],
             "status": "skipped"
         }
     
@@ -153,10 +170,12 @@ def structuring_node(state: VideoAnalysisState) -> Dict:
         # Limit the transcript
         truncated_transcript = transcript[:5000] if len(transcript) > 5000 else transcript
         
+        logger.info("Invoking structuring LLM", extra={"transcript_length": len(truncated_transcript)})
         result = chain.invoke({
             "transcript": truncated_transcript,
             "format_instructions": parser.get_format_instructions()
         })
+        logger.info("Structuring completed")
         
         final_result = {
             "video_metadata": {
@@ -179,7 +198,8 @@ def structuring_node(state: VideoAnalysisState) -> Dict:
         }
         
     except Exception as e:
+        logger.exception("Error analyzing structuring")
         return {
-            "error": f"Error analyzing structuring: {str(e)}",
+            "errors": [f"Error analyzing structuring: {str(e)}"],
             "status": "failed"
         }

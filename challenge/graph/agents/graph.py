@@ -1,3 +1,4 @@
+import logging
 from langgraph.graph import StateGraph, END
 from graph.agents.state import VideoAnalysisState
 
@@ -7,8 +8,11 @@ from .nodes import (
     structuring_node
 )
 
+logger = logging.getLogger(__name__)
+
 def should_continue(state: VideoAnalysisState, status_end: list[str] = ["failed", "skipped"]) -> str:
     """Decides whether to continue based on the state"""
+    logger.info("Checking continuation", extra={"status": state.get("status"), "errors": state.get("errors")})
     if state.get("errors") or state.get("status") in status_end:
         return "end"
     return "continue"
@@ -30,6 +34,7 @@ def create_video_analysis_graph():
     Flow:
     START -> extraction -> sentiment_analysis -> structuring -> END
     """
+    logger.info("Creating video analysis graph")
     # Create the state graph
     workflow = StateGraph(VideoAnalysisState)
     
@@ -63,4 +68,6 @@ def create_video_analysis_graph():
     workflow.add_edge("structuring", END)
     
     # Compile the graph
-    return workflow.compile()
+    graph = workflow.compile()
+    logger.info("Video analysis graph compiled")
+    return graph

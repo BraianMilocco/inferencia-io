@@ -14,6 +14,7 @@ from pathlib import Path
 # Import dotenv to load environment variables
 from dotenv import load_dotenv
 import os
+import logging
 
 # Load environment variables from .env file
 load_dotenv()
@@ -134,4 +135,41 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 LLM_API_KEY = os.getenv('LLM_API_KEY', None)
-LLM_MODEL_NAME = os.getenv('LLM_MODEL_NAME', 'gpt-4o-mini')
+_raw_model_name = os.getenv('LLM_MODEL_NAME', '').strip()
+LLM_MODEL_NAME = _raw_model_name or 'gpt-4o-mini'
+
+# Logging configuration
+_raw_log_level = os.getenv('LOG_LEVEL', '').strip()
+LOG_LEVEL = (_raw_log_level or 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'graph': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+    }
+}

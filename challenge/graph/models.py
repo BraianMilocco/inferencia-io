@@ -50,7 +50,9 @@ class VideoAnalysis(models.Model):
     key_points = ArrayField(
         models.TextField(),
         size=3,
-        help_text="The 3 key points of the video"
+        help_text="The 3 key points of the video",
+        blank=True,
+        null=True
     )
     
     # Errors (if any)
