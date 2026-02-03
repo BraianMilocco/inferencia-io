@@ -41,7 +41,7 @@ def get_iso_639_1_code(language_code: str) -> str:
     Returns:
         str: The ISO 639-1 code
     """
-    code = language_code.lower()
+    code = language_code.lower() if language_code else ''
     return LANGUAGE_CODE_MAP.get(code, None)
 
 
