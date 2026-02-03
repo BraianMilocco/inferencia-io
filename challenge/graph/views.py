@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -128,9 +129,11 @@ class VideoAnalysisUploadView(APIView):
             )
 
         video_file = serializer.validated_data["video"]
+        clean_title = Path(video_file.name).stem.replace("_", " ").replace("-", " ").strip()
         temp_path = None
         video_analysis = VideoAnalysis.objects.create(
             video_url=f"upload://{video_file.name}",
+            title=clean_title
         )
 
         try:
@@ -156,7 +159,6 @@ class VideoAnalysisUploadView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            video_analysis.title = result.get("title", "")
             video_analysis.duration_seconds = result.get("duration_seconds", 0)
             video_analysis.language_code = result.get("language_code", "unknown")
             video_analysis.transcript = result.get("transcript", "")
@@ -166,7 +168,6 @@ class VideoAnalysisUploadView(APIView):
             video_analysis.key_points = result.get("key_points", [])
             video_analysis.save(
                 update_fields=[
-                    "title",
                     "duration_seconds",
                     "language_code",
                     "transcript",

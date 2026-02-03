@@ -3,6 +3,8 @@ import logging
 import tempfile
 import uuid
 import subprocess
+import json
+from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, Optional
 import yt_dlp
@@ -141,7 +143,7 @@ class WhisperTranscriptionService:
         Extracts audio from a local video file using ffmpeg.
         """
         audio_path = os.path.join(self.temp_dir, f"temp_audio_{uuid.uuid4().hex}.mp3")
-        logger.info("Extracting audio from local video", extra={"video_path": video_path})
+        logger.info(f"Extracting audio from local video {video_path} to {audio_path}", extra={"video_path": video_path})
         try:
             subprocess.run(
                 [
@@ -160,11 +162,13 @@ class WhisperTranscriptionService:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            duration_seconds = self._get_video_duration_seconds(video_path)
             metadata = {
                 "title": os.path.splitext(os.path.basename(video_path))[0],
-                "duration_seconds": 0,
+                "duration_seconds": duration_seconds,
                 "language_code": None,
             }
+            logger.info(f'metadata extracted: {metadata}', extra={"video_path": video_path})
             return DownloadAudioResponse(
                 audio_path=audio_path,
                 metadata=metadata,
@@ -217,7 +221,33 @@ class WhisperTranscriptionService:
         finally:
             # Clean up temporary file
             self.delete_temp_file(audio_path)
-    
+
+    def _get_video_duration_seconds(self, file_path: str) -> Optional[int]:
+        """
+        Gets the duration of a video in seconds.
+
+        Args:
+            file_path (str): Path to the video file
+
+        Returns:
+            Optional[int]: Duration in seconds or None if failed
+        """
+        logger.info(f"Getting video duration from {file_path}", extra={"file_path": file_path})
+        try:
+            cmd = [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "json",
+                file_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            data = json.loads(result.stdout)
+            duration = float(data["format"]["duration"])
+            return int(duration)
+        except Exception:
+            logger.exception("Failed to read video duration", extra={"file_path": file_path})
+            return None
+
     def get_transcript(self, video_url: str) -> WhisperResponse:
         """
         Gets the transcription of a video using Whisper
@@ -241,6 +271,9 @@ class WhisperTranscriptionService:
             )
 
         transcript_response = self.transcribe_audio(download_response.audio_path)
+        if download_response.audio_path:
+            self.delete_temp_file(download_response.audio_path)
+
         return WhisperResponse(
             transcript=transcript_response.transcript,
             metadata=WhisperMetadata(
@@ -261,20 +294,17 @@ class WhisperTranscriptionService:
             WhisperResponse: The response object containing the transcript and metadata
         """
         download_response = self.extract_audio_from_video(video_path)
+        # Delete video file after extraction
+        self.delete_temp_file(video_path)
+
         if not download_response.success:
-            # Delete temp audio file if exists
             if download_response.audio_path:
                 self.delete_temp_file(download_response.audio_path)
-            self.delete_temp_file(video_path)
-            return WhisperResponse(
-                transcript=None,
-                metadata=None,
-                error=download_response.error,
-            )
+            return WhisperResponse(transcript=None, metadata=None, error=download_response.error)
 
         transcript_response = self.transcribe_audio(download_response.audio_path)
-
-        self.delete_temp_file(video_path)
+        if download_response.audio_path:
+            self.delete_temp_file(download_response.audio_path)
 
         return WhisperResponse(
             transcript=transcript_response.transcript,
@@ -282,6 +312,7 @@ class WhisperTranscriptionService:
                 title=download_response.metadata['title'],
                 duration_seconds=download_response.metadata['duration_seconds'],
                 language_code=download_response.metadata['language_code'],
-            ),
-            error=transcript_response.error,
-        )
+            ), 
+            error=transcript_response.error
+            )
+
