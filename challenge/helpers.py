@@ -4,7 +4,7 @@ from graph.models import VideoAnalysis
 def convert_errors_to_list(serializer_errors: dict) -> list[str]:
     """
     Converts serializer errors to a list of strings
-    
+
     Args:
         serializer_errors (dict): Dictionary of serializer errors
     Returns:
@@ -15,6 +15,7 @@ def convert_errors_to_list(serializer_errors: dict) -> list[str]:
         for err in errors:
             error_messages.append(f"{field}: {err}")
     return error_messages
+
 
 LANGUAGE_CODE_MAP = {
     "english": "en",
@@ -28,8 +29,9 @@ LANGUAGE_CODE_MAP = {
     "korean": "ko",
     "arabic": "ar",
     "russian": "ru",
-    "hindi": "hi"
+    "hindi": "hi",
 }
+
 
 def get_iso_639_1_code(language_code: str) -> str:
     """
@@ -43,32 +45,34 @@ def get_iso_639_1_code(language_code: str) -> str:
     return LANGUAGE_CODE_MAP.get(code, None)
 
 
-def process_graph_result(video_analysis: VideoAnalysis, result: dict, title: bool = True) -> tuple[bool, dict]:
+def process_graph_result(
+    video_analysis: VideoAnalysis, result: dict, title: bool = True
+) -> tuple[bool, dict]:
     """
     Process graph result and update video_analysis.
 
     Args:
         video_analysis (VideoAnalysis): The VideoAnalysis instance to update
         result (dict): The result from the graph invocation
-    
+
     Returns:
         tuple[bool, dict]: (success flag, error details if any)
     """
     update_fields = [
-            "duration_seconds",
-            "language_code",
-            "transcript",
-            "sentiment",
-            "sentiment_score",
-            "tone",
-            "key_points"
-        ]
+        "duration_seconds",
+        "language_code",
+        "transcript",
+        "sentiment",
+        "sentiment_score",
+        "tone",
+        "key_points",
+    ]
     if result.get("errors"):
         video_analysis.errors = result["errors"]
         video_analysis.save(update_fields=["errors"])
         return False, {
             "error": "Error while analyzing video",
-            "details": result["errors"]
+            "details": result["errors"],
         }
     if title:
         video_analysis.title = result.get("title", "")
@@ -81,8 +85,6 @@ def process_graph_result(video_analysis: VideoAnalysis, result: dict, title: boo
     video_analysis.tone = result.get("tone", "")
     video_analysis.key_points = result.get("key_points", [])
 
-    video_analysis.save(
-        update_fields=update_fields
-    )
+    video_analysis.save(update_fields=update_fields)
 
     return True, None

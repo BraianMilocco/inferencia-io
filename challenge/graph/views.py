@@ -7,7 +7,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .serializers import (
     VideoAnalysisRequestSerializer,
     VideoAnalysisResponseSerializer,
-    VideoAnalysisUploadSerializer
+    VideoAnalysisUploadSerializer,
 )
 from .models import VideoAnalysis
 from .agents.graph import create_video_analysis_graph
@@ -21,13 +21,14 @@ class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
     POST /api/analyze/youtube/ - Analyze a new YouTube video
     Body: {"video_url": "https://youtube.com/watch?v=xxxxx"}
     """
-    queryset = VideoAnalysis.objects.exclude(
-        video_url__istartswith="upload://"
-    ).filter(
-        video_url__icontains="youtube."
-    ).order_by('-created_at')
+
+    queryset = (
+        VideoAnalysis.objects.exclude(video_url__istartswith="upload://")
+        .filter(video_url__icontains="youtube.")
+        .order_by("-created_at")
+    )
     serializer_class = VideoAnalysisResponseSerializer
-    
+
     def post(self, request):
         # Validar input
         data = request.data
@@ -35,15 +36,14 @@ class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
         if not serializer.is_valid():
             error_messages = convert_errors_to_list(serializer.errors)
             VideoAnalysis.objects.create(
-                video_url=data.get('video_url', ''),
+                video_url=data.get("video_url", ""),
                 errors=error_messages,
             )
             return Response(
-                {"error": error_messages},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": error_messages}, status=status.HTTP_400_BAD_REQUEST
             )
-        
-        video_url = serializer.validated_data['video_url']
+
+        video_url = serializer.validated_data["video_url"]
         # Creates a VideoAnalysis entry
         video_analysis = VideoAnalysis.objects.create(
             video_url=video_url,
@@ -52,34 +52,25 @@ class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
             # Create and invoke the graph
             graph = create_video_analysis_graph()
             result = graph.invoke({"video_url": video_url})
-            
+
             success, details = process_graph_result(video_analysis, result, title=True)
             if not success:
                 return Response(
-                    {"error": details['details']},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": details["details"]}, status=status.HTTP_400_BAD_REQUEST
                 )
-            video_analysis.refresh_from_db()           
+            video_analysis.refresh_from_db()
             # Return response
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
-            return Response(
-                response_serializer.data,
-                status=status.HTTP_201_CREATED
-            )
-            
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             video_analysis.errors = [str(e)]
-            video_analysis.save(
-                update_fields=["errors"]
-            )
+            video_analysis.save(update_fields=["errors"])
             return Response(
-                {
-                    "error": "Unexpected error during analysis",
-                    "details": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Unexpected error during analysis", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-    
+
     def get(self, request, *args, **kwargs):
         """List previous analyses with pagination"""
         return self.list(request, *args, **kwargs)
@@ -92,9 +83,10 @@ class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
     POST /api/analyze/upload/ - Analyze an uploaded video
     Body: multipart/form-data with "video" file
     """
+
     queryset = VideoAnalysis.objects.filter(
         video_url__istartswith="upload://"
-    ).order_by('-created_at')
+    ).order_by("-created_at")
     serializer_class = VideoAnalysisResponseSerializer
     parser_classes = (MultiPartParser, FormParser)
 
@@ -107,20 +99,20 @@ class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
         if not serializer.is_valid():
             error_messages = convert_errors_to_list(serializer.errors)
             VideoAnalysis.objects.create(
-                video_url=request.data.get('video', ''),
+                video_url=request.data.get("video", ""),
                 errors=error_messages,
             )
             return Response(
-                {"error": error_messages},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": error_messages}, status=status.HTTP_400_BAD_REQUEST
             )
 
         video_file = serializer.validated_data["video"]
-        clean_title = Path(video_file.name).stem.replace("_", " ").replace("-", " ").strip()
+        clean_title = (
+            Path(video_file.name).stem.replace("_", " ").replace("-", " ").strip()
+        )
         temp_path = None
         video_analysis = VideoAnalysis.objects.create(
-            video_url=f"upload://{video_file.name}",
-            title=clean_title
+            video_url=f"upload://{video_file.name}", title=clean_title
         )
 
         try:
@@ -130,33 +122,28 @@ class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
                 temp_path = tmp.name
 
             graph = create_video_analysis_graph()
-            result = graph.invoke({
-                "video_url": video_analysis.video_url,
-                "video_path": temp_path,
-            })
+            result = graph.invoke(
+                {
+                    "video_url": video_analysis.video_url,
+                    "video_path": temp_path,
+                }
+            )
 
             success, details = process_graph_result(video_analysis, result, title=False)
             if not success:
                 return Response(
-                    {"error": details['details']},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": details["details"]}, status=status.HTTP_400_BAD_REQUEST
                 )
             video_analysis.refresh_from_db()
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
-            return Response(
-                response_serializer.data,
-                status=status.HTTP_201_CREATED
-            )
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             video_analysis.errors = [str(e)]
             video_analysis.save(update_fields=["errors"])
             return Response(
-                {
-                    "error": "Unexpected error during analysis",
-                    "details": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Unexpected error during analysis", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         finally:
             if temp_path and os.path.exists(temp_path):

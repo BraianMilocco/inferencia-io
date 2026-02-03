@@ -4,7 +4,7 @@ from typing import TypedDict, Optional, List
 class VideoAnalysisState(TypedDict):
     """
     Shared state among all graph nodes.
-    
+
     Attributes:
         video_url (str): The URL of the video to be analyzed.
         transcript (Optional[str]): The transcription of the video's audio.
@@ -22,24 +22,24 @@ class VideoAnalysisState(TypedDict):
     # Input
     video_url: Optional[str]
     video_path: Optional[str]
-    
+
     # Extraction node outputs
     transcript: Optional[str]
     title: Optional[str]
     duration_seconds: Optional[int]
     language_code: Optional[str]
-    
+
     # Sentiment analysis node outputs
     sentiment: Optional[str]
     sentiment_score: Optional[float]
     tone: Optional[str]
-    
+
     # Structuring node outputs
     key_points: Optional[List[str]]
-    
+
     # Final result
     final_result: Optional[dict]
-    
+
     # Error handling
     errors: Optional[List[str]]
     status: Optional[str]  # "processing", "success", "failed"

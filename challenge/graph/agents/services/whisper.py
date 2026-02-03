@@ -16,18 +16,22 @@ from helpers import get_iso_639_1_code
 
 logger = logging.getLogger(__name__)
 
+
 class WhisperMetadata(BaseModel):
     title: Optional[str]
     duration_seconds: Optional[int]
     language_code: Optional[str]
 
+
 class WhisperResponse(BaseModel):
     """
     Response object for Whisper transcription
     """
+
     transcript: Optional[str]
     metadata: Optional[WhisperMetadata]
     error: Optional[str] = None
+
 
 class DownloadAudioResponse(BaseModel):
     audio_path: Optional[str]
@@ -35,16 +39,18 @@ class DownloadAudioResponse(BaseModel):
     success: bool
     error: Optional[str] = None
 
+
 class TranscriptAudioResponse(BaseModel):
     transcript: Optional[str]
     language_code: Optional[str] = None
     success: bool
     error: Optional[str] = None
 
+
 class WhisperTranscriptionService:
-    """ 
-    Service to extract transcriptions using OpenAI's Whisper 
-    
+    """
+    Service to extract transcriptions using OpenAI's Whisper
+
     Attributes:
         client (OpenAI): OpenAI client for API interactions
         temp_dir (str): Directory for temporary file storage
@@ -55,31 +61,37 @@ class WhisperTranscriptionService:
         get_transcript(video_url: str) -> WhisperResponse: Gets the transcription of a video using Whisper.
 
     """
-    
+
     def __init__(self):
         self.client = OpenAI(api_key=LLM_API_KEY)
         self.temp_dir = tempfile.gettempdir()
-        logger.info("WhisperTranscriptionService initialized", extra={"temp_dir": self.temp_dir})
+        logger.info(
+            "WhisperTranscriptionService initialized", extra={"temp_dir": self.temp_dir}
+        )
 
     def transcription_is_too_short(self, transcript: str) -> bool:
         """
         Validates if the transcription is too short to be meaningful.
         This is use so gpt and whisper don't waste resources on very short transcriptions.
-                
+
         Args:
             transcript (str): The transcription text
-        
+
         Returns:
             bool: True if the transcription is too short, False otherwise
         """
-        if not transcript or len(transcript.strip()) < 5 or len(transcript.split(" ")) < 3:
+        if (
+            not transcript
+            or len(transcript.strip()) < 5
+            or len(transcript.split(" ")) < 3
+        ):
             return True
         return False
 
     def delete_temp_file(self, file_path: str):
         """
         Deletes a temporary file.
-        
+
         Args:
             file_path (str): Path to the file
         """
@@ -90,63 +102,66 @@ class WhisperTranscriptionService:
     def download_audio(self, video_url: str) -> DownloadAudioResponse:
         """
         Downloads audio from a YouTube video and saves it to a temporary file.
-        
+
         Args:
             video_url (str): URL of the YouTube video
 
         Returns:
             DownloadAudioResponse: The response object containing the audio path, metadata, success status, and error message if any
         """
-        audio_path = os.path.join(self.temp_dir, 'temp_audio.mp3')
-        
+        audio_path = os.path.join(self.temp_dir, "temp_audio.mp3")
+
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'outtmpl': audio_path.replace('.mp3', ''),
-            'quiet': True,
-            'no_warnings': True,
+            "format": "bestaudio/best",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }
+            ],
+            "outtmpl": audio_path.replace(".mp3", ""),
+            "quiet": True,
+            "no_warnings": True,
         }
-        
+
         logger.info("Starting audio download", extra={"video_url": video_url})
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
                 logger.info("Audio downloaded", extra={"audio_path": audio_path})
 
-                language = info.get('language', None)
+                language = info.get("language", None)
                 if language is not None:
-                    language = language.lower().split('-')[0].strip()
+                    language = language.lower().split("-")[0].strip()
                 metadata = {
-                    'title': info.get('title', ''),
-                    'duration_seconds': info.get('duration', 0),
-                    'language_code': language,
+                    "title": info.get("title", ""),
+                    "duration_seconds": info.get("duration", 0),
+                    "language_code": language,
                 }
-                
+
             return DownloadAudioResponse(
-                audio_path=audio_path,
-                metadata=metadata,
-                success=True,
-                error=None
+                audio_path=audio_path, metadata=metadata, success=True, error=None
             )
         except yt_dlp.utils.DownloadError as e:
-            logger.exception("DownloadError while downloading audio", extra={"video_url": video_url})
+            logger.exception(
+                "DownloadError while downloading audio", extra={"video_url": video_url}
+            )
             return DownloadAudioResponse(
                 audio_path=None,
                 metadata=None,
                 success=False,
-                error=f"DownloadError while downloading audio: {str(e)}"
+                error=f"DownloadError while downloading audio: {str(e)}",
             )
         except Exception as e:
-            logger.exception("Error while downloading audio", extra={"video_url": video_url})
+            logger.exception(
+                "Error while downloading audio", extra={"video_url": video_url}
+            )
             return DownloadAudioResponse(
                 audio_path=None,
                 metadata=None,
                 success=False,
-                error=f"Error while downloading audio: {str(e)}"
+                error=f"Error while downloading audio: {str(e)}",
             )
 
     def extract_audio_from_video(self, video_path: str) -> DownloadAudioResponse:
@@ -154,7 +169,10 @@ class WhisperTranscriptionService:
         Extracts audio from a local video file using ffmpeg.
         """
         audio_path = os.path.join(self.temp_dir, f"temp_audio_{uuid.uuid4().hex}.mp3")
-        logger.info(f"Extracting audio from local video {video_path} to {audio_path}", extra={"video_path": video_path})
+        logger.info(
+            f"Extracting audio from local video {video_path} to {audio_path}",
+            extra={"video_path": video_path},
+        )
         try:
             subprocess.run(
                 [
@@ -179,7 +197,9 @@ class WhisperTranscriptionService:
                 "duration_seconds": duration_seconds,
                 "language_code": None,
             }
-            logger.info(f'metadata extracted: {metadata}', extra={"video_path": video_path})
+            logger.info(
+                f"metadata extracted: {metadata}", extra={"video_path": video_path}
+            )
             return DownloadAudioResponse(
                 audio_path=audio_path,
                 metadata=metadata,
@@ -187,7 +207,9 @@ class WhisperTranscriptionService:
                 error=None,
             )
         except Exception as e:
-            logger.exception("Error extracting audio from video", extra={"video_path": video_path})
+            logger.exception(
+                "Error extracting audio from video", extra={"video_path": video_path}
+            )
             return DownloadAudioResponse(
                 audio_path=None,
                 metadata=None,
@@ -198,7 +220,7 @@ class WhisperTranscriptionService:
     def transcribe_audio(self, audio_path: str) -> TranscriptAudioResponse:
         """
         Transcribes audio using OpenAI's Whisper.
-        
+
         Args:
             audio_path (str): Path to the audio file
 
@@ -210,23 +232,32 @@ class WhisperTranscriptionService:
         try:
             with open(audio_path, "rb") as audio_file:
                 result = self.client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="verbose_json"
+                    model="whisper-1", file=audio_file, response_format="verbose_json"
                 )
-            logger.info(f"Transcription completed -> Transcript: {result.text}", extra={"audio_path": audio_path})
+            logger.info(
+                f"Transcription completed -> Transcript: {result.text}",
+                extra={"audio_path": audio_path},
+            )
             transcript = result.text if result.text else ""
             if self.transcription_is_too_short(transcript):
-                logger.warning("Transcription too short", extra={"audio_path": audio_path})
-                return TranscriptAudioResponse(transcript=transcript, success=False, error="Transcription too short")
+                logger.warning(
+                    "Transcription too short", extra={"audio_path": audio_path}
+                )
+                return TranscriptAudioResponse(
+                    transcript=transcript,
+                    success=False,
+                    error="Transcription too short",
+                )
             return TranscriptAudioResponse(
                 transcript=result.text,
                 language_code=getattr(result, "language", None),
                 success=True,
-                error=None
+                error=None,
             )
         except Exception as e:
-            logger.exception("Error transcribing audio", extra={"audio_path": audio_path})
+            logger.exception(
+                "Error transcribing audio", extra={"audio_path": audio_path}
+            )
             return TranscriptAudioResponse(transcript=None, success=False, error=str(e))
         finally:
             # Clean up temporary file
@@ -242,26 +273,34 @@ class WhisperTranscriptionService:
         Returns:
             Optional[int]: Duration in seconds or None if failed
         """
-        logger.info(f"Getting video duration from {file_path}", extra={"file_path": file_path})
+        logger.info(
+            f"Getting video duration from {file_path}", extra={"file_path": file_path}
+        )
         try:
             cmd = [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "json",
-                file_path
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                file_path,
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
             duration = float(data["format"]["duration"])
             return int(duration)
         except Exception:
-            logger.exception("Failed to read video duration", extra={"file_path": file_path})
+            logger.exception(
+                "Failed to read video duration", extra={"file_path": file_path}
+            )
             return None
 
     def get_transcript(self, video_url: str) -> WhisperResponse:
         """
         Gets the transcription of a video using Whisper
-        
+
         Args:
             video_url (str): URL of the YouTube video
 
@@ -285,9 +324,9 @@ class WhisperTranscriptionService:
             self.delete_temp_file(download_response.audio_path)
 
         metadata = WhisperMetadata(
-            title=download_response.metadata['title'],
-            duration_seconds=download_response.metadata['duration_seconds'],
-            language_code=download_response.metadata['language_code'],
+            title=download_response.metadata["title"],
+            duration_seconds=download_response.metadata["duration_seconds"],
+            language_code=download_response.metadata["language_code"],
         )
         return WhisperResponse(
             transcript=transcript_response.transcript,
@@ -310,15 +349,17 @@ class WhisperTranscriptionService:
             self.delete_temp_file(video_path)
             if download_response.audio_path:
                 self.delete_temp_file(download_response.audio_path)
-            return WhisperResponse(transcript=None, metadata=None, error=download_response.error)
+            return WhisperResponse(
+                transcript=None, metadata=None, error=download_response.error
+            )
 
         transcript_response = self.transcribe_audio(download_response.audio_path)
 
         metadata = WhisperMetadata(
-            title=download_response.metadata['title'],
+            title=download_response.metadata["title"],
             duration_seconds=self._get_video_duration_seconds(video_path),
             # As language code is not extracted from local files, we use the one from transcription
-            # And whisper returns language codes in different formats, we normalize it            
+            # And whisper returns language codes in different formats, we normalize it
             language_code=get_iso_639_1_code(transcript_response.language_code),
         )
         self.delete_temp_file(video_path)
@@ -327,4 +368,3 @@ class WhisperTranscriptionService:
             metadata=metadata,
             error=transcript_response.error,
         )
-
