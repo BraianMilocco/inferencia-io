@@ -109,7 +109,13 @@ class WhisperTranscriptionService:
         Returns:
             DownloadAudioResponse: The response object containing the audio path, metadata, success status, and error message if any
         """
-        audio_path = os.path.join(self.temp_dir, "temp_audio.mp3")
+        # keep unique filenames to avoid collisions
+        unique_id = uuid.uuid4().hex
+        audio_filename = f"temp_audio_{unique_id}.mp3"
+        audio_path = os.path.join(self.temp_dir, audio_filename)
+        
+        # Template without extension, yt-dlp adds it automatically
+        output_template = os.path.join(self.temp_dir, f"temp_audio_{unique_id}")
 
         ydl_opts = {
             "format": "bestaudio/best",
@@ -120,7 +126,7 @@ class WhisperTranscriptionService:
                     "preferredquality": "192",
                 }
             ],
-            "outtmpl": audio_path.replace(".mp3", ""),
+            "outtmpl": output_template,  # Without .mp3, yt-dlp adds it automatically
             "quiet": True,
             "no_warnings": True,
         }
