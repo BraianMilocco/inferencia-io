@@ -51,12 +51,16 @@ def extraction_node(state: VideoAnalysisState) -> Dict:
     Returns:
         Dict: Result containing transcript, metadata, error, and status
     """
-    video_url = state["video_url"]
-    logger.info("Extraction node started", extra={"video_url": video_url})
+    video_url = state.get("video_url")
+    video_path = state.get("video_path")
+    logger.info("Extraction node started", extra={"video_url": video_url, "video_path": video_path})
 
     service = WhisperTranscriptionService()
     
-    result: WhisperResponse = service.get_transcript(video_url)
+    if video_path:
+        result: WhisperResponse = service.get_transcript_from_file(video_path)
+    else:
+        result = service.get_transcript(video_url)
 
     if result.error:
         return {

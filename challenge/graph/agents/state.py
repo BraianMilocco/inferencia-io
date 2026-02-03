@@ -20,7 +20,8 @@ class VideoAnalysisState(TypedDict):
     """
 
     # Input
-    video_url: str
+    video_url: Optional[str]
+    video_path: Optional[str]
     
     # Extraction node outputs
     transcript: Optional[str]

@@ -15,6 +15,19 @@ class VideoAnalysisRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError("URL must be from YouTube")
         return value
 
+
+class VideoAnalysisUploadSerializer(serializers.Serializer):
+    """Serializer for MP4 upload requests"""
+    video = serializers.FileField(required=True, help_text="MP4 video file to analyze")
+
+    def validate_video(self, value):
+        content_type = getattr(value, "content_type", "")
+        if content_type and content_type != "video/mp4":
+            raise serializers.ValidationError("File must be an MP4 video")
+        if not value.name.lower().endswith(".mp4"):
+            raise serializers.ValidationError("File must have .mp4 extension")
+        return value
+
 class VideoAnalysisResponseSerializer(serializers.ModelSerializer):
     """Serializer for the response"""
     

@@ -1,6 +1,8 @@
 import os
 import logging
 import tempfile
+import uuid
+import subprocess
 from pydantic import BaseModel
 from typing import Dict, Optional
 import yt_dlp
@@ -133,7 +135,51 @@ class WhisperTranscriptionService:
                 success=False,
                 error=f"Error while downloading audio: {str(e)}"
             )
-    
+
+    def extract_audio_from_video(self, video_path: str) -> DownloadAudioResponse:
+        """
+        Extracts audio from a local video file using ffmpeg.
+        """
+        audio_path = os.path.join(self.temp_dir, f"temp_audio_{uuid.uuid4().hex}.mp3")
+        logger.info("Extracting audio from local video", extra={"video_path": video_path})
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    video_path,
+                    "-vn",
+                    "-acodec",
+                    "libmp3lame",
+                    "-q:a",
+                    "2",
+                    audio_path,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            metadata = {
+                "title": os.path.splitext(os.path.basename(video_path))[0],
+                "duration_seconds": 0,
+                "language_code": None,
+            }
+            return DownloadAudioResponse(
+                audio_path=audio_path,
+                metadata=metadata,
+                success=True,
+                error=None,
+            )
+        except Exception as e:
+            logger.exception("Error extracting audio from video", extra={"video_path": video_path})
+            return DownloadAudioResponse(
+                audio_path=None,
+                metadata=None,
+                success=False,
+                error=f"Error extracting audio from video: {str(e)}",
+            )
+
     def transcribe_audio(self, audio_path: str) -> TranscriptAudioResponse:
         """
         Transcribes audio using OpenAI's Whisper.
@@ -182,11 +228,9 @@ class WhisperTranscriptionService:
         Returns:
             WhisperResponse: The response object containing the transcript and metadata
         """
-        # Download audio
         logger.info("Getting transcript", extra={"video_url": video_url})
         download_response = self.download_audio(video_url)
         if not download_response.success:
-            # Delete temp file if exists
             if download_response.audio_path:
                 self.delete_temp_file(download_response.audio_path)
             logger.error("Download failed", extra={"error": download_response.error})
@@ -196,11 +240,42 @@ class WhisperTranscriptionService:
                 error=download_response.error,
             )
 
-        # Transcript audio
         transcript_response = self.transcribe_audio(download_response.audio_path)
-        if transcript_response.error:
-            logger.error("Transcription failed", extra={"error": transcript_response.error})
-        
+        return WhisperResponse(
+            transcript=transcript_response.transcript,
+            metadata=WhisperMetadata(
+                title=download_response.metadata['title'],
+                duration_seconds=download_response.metadata['duration_seconds'],
+                language_code=download_response.metadata['language_code'],
+            ),
+            error=transcript_response.error,
+        )
+
+    def get_transcript_from_file(self, video_path: str) -> WhisperResponse:
+        """
+        Gets the transcription from a local video file.
+
+        Args:
+            video_path (str): Path to the local video file
+        Returns:
+            WhisperResponse: The response object containing the transcript and metadata
+        """
+        download_response = self.extract_audio_from_video(video_path)
+        if not download_response.success:
+            # Delete temp audio file if exists
+            if download_response.audio_path:
+                self.delete_temp_file(download_response.audio_path)
+            self.delete_temp_file(video_path)
+            return WhisperResponse(
+                transcript=None,
+                metadata=None,
+                error=download_response.error,
+            )
+
+        transcript_response = self.transcribe_audio(download_response.audio_path)
+
+        self.delete_temp_file(video_path)
+
         return WhisperResponse(
             transcript=transcript_response.transcript,
             metadata=WhisperMetadata(
