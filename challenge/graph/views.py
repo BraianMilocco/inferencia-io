@@ -1,9 +1,8 @@
 import os
 import tempfile
 from pathlib import Path
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics, mixins
 from rest_framework.parsers import MultiPartParser, FormParser
 from .serializers import (
     VideoAnalysisRequestSerializer,
@@ -12,21 +11,29 @@ from .serializers import (
 )
 from .models import VideoAnalysis
 from .agents.graph import create_video_analysis_graph
-from helpers import convert_errors_to_list
+from helpers import convert_errors_to_list, process_graph_result
 
-class VideoAnalysisYoutubeView(APIView):
+
+class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
     """
     API endpoint to analyze YouTube videos.
-    POST /api/analyze/youtube/
+    GET /api/analyze/youtube/ - List previous analyses (paginated)
+    POST /api/analyze/youtube/ - Analyze a new YouTube video
     Body: {"video_url": "https://youtube.com/watch?v=xxxxx"}
     """
+    queryset = VideoAnalysis.objects.exclude(
+        video_url__istartswith="upload://"
+    ).filter(
+        video_url__icontains="youtube."
+    ).order_by('-created_at')
+    serializer_class = VideoAnalysisResponseSerializer
     
     def post(self, request):
         # Validar input
         data = request.data
         serializer = VideoAnalysisRequestSerializer(data=data)
         if not serializer.is_valid():
-            error_messages = convert_errors_to_list(serializer.errors.items())
+            error_messages = convert_errors_to_list(serializer.errors)
             VideoAnalysis.objects.create(
                 video_url=data.get('video_url', ''),
                 errors=error_messages,
@@ -46,38 +53,7 @@ class VideoAnalysisYoutubeView(APIView):
             graph = create_video_analysis_graph()
             result = graph.invoke({"video_url": video_url})
             
-            if result.get("errors"):
-                video_analysis.errors = result["errors"]
-                video_analysis.save()
-                return Response(
-                    {
-                        "error": "Error while analyzing video",
-                        "details": result["errors"]
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Save analysis to DB
-            video_analysis.title = result.get("title", "")
-            video_analysis.duration_seconds = result.get("duration_seconds", 0)
-            video_analysis.language_code = result.get("language_code", "unknown")
-            video_analysis.transcript = result.get("transcript", "")
-            video_analysis.sentiment = result.get("sentiment", "neutral")
-            video_analysis.sentiment_score = result.get("sentiment_score", 0.5)
-            video_analysis.tone = result.get("tone", "")
-            video_analysis.key_points = result.get("key_points", [])
-            video_analysis.save(
-                update_fields=[
-                    "title",
-                    "duration_seconds",
-                    "language_code",
-                    "transcript",
-                    "sentiment",
-                    "sentiment_score",
-                    "tone",
-                    "key_points"
-                ]
-            )
+            process_graph_result(video_analysis, result, title=True)
             video_analysis.refresh_from_db()           
             # Return response
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
@@ -99,26 +75,32 @@ class VideoAnalysisYoutubeView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    def get(self, request):
-        """List previous analyses"""
-        analyses = VideoAnalysis.objects.all()[:10]  # Last 10
-        serializer = VideoAnalysisResponseSerializer(analyses, many=True)
-        return Response(serializer.data)
+    def get(self, request, *args, **kwargs):
+        """List previous analyses with pagination"""
+        return self.list(request, *args, **kwargs)
 
 
-class VideoAnalysisUploadView(APIView):
+class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
     """
     API endpoint to analyze uploaded MP4 videos.
-    POST /api/analyze/upload/
+    GET /api/analyze/upload/ - List previous analyses (paginated)
+    POST /api/analyze/upload/ - Analyze an uploaded video
     Body: multipart/form-data with "video" file
     """
-
+    queryset = VideoAnalysis.objects.filter(
+        video_url__istartswith="upload://"
+    ).order_by('-created_at')
+    serializer_class = VideoAnalysisResponseSerializer
     parser_classes = (MultiPartParser, FormParser)
+
+    def get(self, request, *args, **kwargs):
+        """List previous analyses with pagination"""
+        return self.list(request, *args, **kwargs)
 
     def post(self, request):
         serializer = VideoAnalysisUploadSerializer(data=request.data)
         if not serializer.is_valid():
-            error_messages = convert_errors_to_list(serializer.errors.items())
+            error_messages = convert_errors_to_list(serializer.errors)
             VideoAnalysis.objects.create(
                 video_url=request.data.get('video', ''),
                 errors=error_messages,
@@ -148,35 +130,7 @@ class VideoAnalysisUploadView(APIView):
                 "video_path": temp_path,
             })
 
-            if result.get("errors"):
-                video_analysis.errors = result["errors"]
-                video_analysis.save(update_fields=["errors"])
-                return Response(
-                    {
-                        "error": "Error durante el análisis",
-                        "details": result["errors"]
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            video_analysis.duration_seconds = result.get("duration_seconds", 0)
-            video_analysis.language_code = result.get("language_code", "unknown")
-            video_analysis.transcript = result.get("transcript", "")
-            video_analysis.sentiment = result.get("sentiment", "neutral")
-            video_analysis.sentiment_score = result.get("sentiment_score", 0.5)
-            video_analysis.tone = result.get("tone", "")
-            video_analysis.key_points = result.get("key_points", [])
-            video_analysis.save(
-                update_fields=[
-                    "duration_seconds",
-                    "language_code",
-                    "transcript",
-                    "sentiment",
-                    "sentiment_score",
-                    "tone",
-                    "key_points"
-                ]
-            )
+            process_graph_result(video_analysis, result, title=False)
             video_analysis.refresh_from_db()
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
             return Response(

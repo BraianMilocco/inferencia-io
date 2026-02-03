@@ -3,5 +3,5 @@ from .views import VideoAnalysisYoutubeView, VideoAnalysisUploadView
 
 urlpatterns = [
     path('analyze/youtube/', VideoAnalysisYoutubeView.as_view(), name='video-analysis-youtube'),
-    path('analyze/upload/', VideoAnalysisUploadView.as_view(), name='video-analysis-upload'),
+    path('analyze/mp4/', VideoAnalysisUploadView.as_view(), name='video-analysis-upload'),
 ]   

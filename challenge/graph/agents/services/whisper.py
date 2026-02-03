@@ -4,7 +4,6 @@ import tempfile
 import uuid
 import subprocess
 import json
-from pathlib import Path
 from pydantic import BaseModel
 from typing import Dict, Optional
 import yt_dlp
@@ -13,6 +12,7 @@ from openai import OpenAI
 
 # Get from settings or environment
 from challenge_inferencia.settings import LLM_API_KEY
+from helpers import get_iso_639_1_code
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ class DownloadAudioResponse(BaseModel):
 
 class TranscriptAudioResponse(BaseModel):
     transcript: Optional[str]
+    language_code: Optional[str] = None
     success: bool
     error: Optional[str] = None
 
@@ -99,13 +100,8 @@ class WhisperTranscriptionService:
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
-                logger.info(f"Audio downloaded - info {info.keys()}", extra={"audio_path": audio_path})
-                # Extract metadata
-                logger.info("EXTRACTING METADATA")
-                keys = ['title', 'duration', 'language', 'language_preference', 'subtitles', 'ext', 'description', "duration_string", 'has_drm', 'preference']
-                for key in keys:
-                    logger.info(f"{key}: {info.get(key)}")
-                
+                logger.info("Audio downloaded", extra={"audio_path": audio_path})
+
                 language = info.get('language', None)
                 if language is not None:
                     language = language.lower().split('-')[0].strip()
@@ -197,27 +193,22 @@ class WhisperTranscriptionService:
 
         logger.info("Starting transcription", extra={"audio_path": audio_path})
         try:
-            with open(audio_path, 'rb') as audio_file:
-                transcript = self.client.audio.transcriptions.create(
+            with open(audio_path, "rb") as audio_file:
+                result = self.client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
-                    response_format="text"
+                    response_format="verbose_json"
                 )
-            
-            logger.info("Transcription finished")
+            logger.info("Transcription completed", extra={"audio_path": audio_path})
             return TranscriptAudioResponse(
-                transcript=transcript,
+                transcript=result.text,
+                language_code=getattr(result, "language", None),
                 success=True,
                 error=None
             )
-            
         except Exception as e:
-            logger.exception("Error while transcribing audio", extra={"audio_path": audio_path})
-            return TranscriptAudioResponse(
-                transcript=None,
-                success=False,
-                error=f"Error while transcribing audio: {str(e)}"
-            )
+            logger.exception("Error transcribing audio", extra={"audio_path": audio_path})
+            return TranscriptAudioResponse(transcript=None, success=False, error=str(e))
         finally:
             # Clean up temporary file
             self.delete_temp_file(audio_path)
@@ -274,13 +265,14 @@ class WhisperTranscriptionService:
         if download_response.audio_path:
             self.delete_temp_file(download_response.audio_path)
 
+        metadata = WhisperMetadata(
+            title=download_response.metadata['title'],
+            duration_seconds=download_response.metadata['duration_seconds'],
+            language_code=download_response.metadata['language_code'],
+        )
         return WhisperResponse(
             transcript=transcript_response.transcript,
-            metadata=WhisperMetadata(
-                title=download_response.metadata['title'],
-                duration_seconds=download_response.metadata['duration_seconds'],
-                language_code=download_response.metadata['language_code'],
-            ),
+            metadata=metadata,
             error=transcript_response.error,
         )
 
@@ -294,25 +286,26 @@ class WhisperTranscriptionService:
             WhisperResponse: The response object containing the transcript and metadata
         """
         download_response = self.extract_audio_from_video(video_path)
-        # Delete video file after extraction
-        self.delete_temp_file(video_path)
 
         if not download_response.success:
+            self.delete_temp_file(video_path)
             if download_response.audio_path:
                 self.delete_temp_file(download_response.audio_path)
             return WhisperResponse(transcript=None, metadata=None, error=download_response.error)
 
         transcript_response = self.transcribe_audio(download_response.audio_path)
-        if download_response.audio_path:
-            self.delete_temp_file(download_response.audio_path)
 
+        metadata = WhisperMetadata(
+            title=download_response.metadata['title'],
+            duration_seconds=self._get_video_duration_seconds(video_path),
+            # As language code is not extracted from local files, we use the one from transcription
+            # And whisper returns language codes in different formats, we normalize it            
+            language_code=get_iso_639_1_code(transcript_response.language_code),
+        )
+        self.delete_temp_file(video_path)
         return WhisperResponse(
             transcript=transcript_response.transcript,
-            metadata=WhisperMetadata(
-                title=download_response.metadata['title'],
-                duration_seconds=download_response.metadata['duration_seconds'],
-                language_code=download_response.metadata['language_code'],
-            ), 
-            error=transcript_response.error
-            )
+            metadata=metadata,
+            error=transcript_response.error,
+        )
 

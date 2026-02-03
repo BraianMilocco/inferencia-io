@@ -27,7 +27,6 @@ class VideoAnalysis(models.Model):
         errors (ArrayField): List of errors encountered during processing (if any).
 
     Methods:
-        to_dict(): Returns the analysis data in a dictionary format.
         __str__(): Returns a string representation of the analysis.
     """
 
@@ -70,19 +69,3 @@ class VideoAnalysis(models.Model):
     
     def __str__(self) -> str:
         return f"Analysis of {self.video_url[:50]} - {self.sentiment}"
-    
-    def to_dict(self) -> dict:
-        """Returns the JSON format required by the challenge"""
-        return {
-            "video_metadata": {
-                "title": self.title,
-                "duration_seconds": self.duration_seconds,
-                "language_code": self.language_code
-            },
-            "analysis": {
-                "sentiment": self.sentiment,
-                "sentiment_score": self.sentiment_score,
-                "tone": self.tone,
-                "key_points": self.key_points
-            }
-        }

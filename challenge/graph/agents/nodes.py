@@ -93,7 +93,7 @@ def sentiment_analysis_node(state: VideoAnalysisState) -> Dict:
     transcript = state.get("transcript")
     logger.info("Sentiment analysis node started")
     
-    # Si no hay transcripción, saltar este nodo
+    # If no transcript, skip sentiment analysis
     if not transcript:
         logger.warning("Sentiment analysis skipped: no transcript")
         return {

@@ -14,7 +14,7 @@ from pathlib import Path
 # Import dotenv to load environment variables
 from dotenv import load_dotenv
 import os
-import logging
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -133,6 +133,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,  # Default page size
+}
 
 LLM_API_KEY = os.getenv('LLM_API_KEY', None)
 _raw_model_name = os.getenv('LLM_MODEL_NAME', '').strip()
