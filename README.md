@@ -556,3 +556,128 @@ Logs importantes:
 - `graph.agents.graph`: Flujo del grafo
 - `graph.agents.nodes`: Ejecución de nodos
 - `graph.agents.services.whisper`: Transcripción
+
+---
+
+## 🧪 Testing
+
+El proyecto incluye tests para validar el endpoint de análisis de videos de YouTube.
+
+### Ejecutar Tests
+
+**Con Docker:**
+```bash
+docker compose exec web uv run python manage.py test graph.tests
+```
+
+**Localmente:**
+```bash
+uv run python manage.py test graph.tests
+```
+
+**Con coverage:**
+```bash
+# Instalar coverage
+uv add coverage
+
+# Ejecutar tests con coverage
+uv run coverage run --source='.' manage.py test graph.tests
+uv run coverage report
+uv run coverage html  # Genera reporte HTML en htmlcov/
+```
+
+### Casos de Prueba
+
+Los tests cubren los siguientes escenarios para la vista `VideoAnalysisYoutubeView`:
+
+| Escenario | URL de prueba | Resultado esperado |
+|-----------|---------------|-------------------|
+| ✅ Video con audio | `youtube.com/watch?v=ssYt09bCgUY` | 201 Created |
+| ⚠️ Video sin audio | `youtube.com/watch?v=6TBKF6GF9-g` | 500 Error (audio insuficiente) |
+| ❌ Video inexistente | `youtube.com/watch?v=AAASADADADADADADADDA` | 500 Error |
+| ❌ URL inválida | `yoyobe.com/watch?v=6TBKF6GF9-g` | 400/500 Error |
+| ✅ Paginación | GET con `?page=2` | 200 OK |
+
+### Tests Pendientes
+
+Los siguientes tests no están implementados pero podrían agregarse en el futuro:
+
+- ❌ **Tests para `VideoAnalysisUploadView`**: No implementados para evitar la necesidad de descargar y almacenar archivos de video de prueba en el repositorio. El endpoint `/api/analyze/mp4/` ha sido probado manualmente y funciona correctamente.
+- ❌ **Tests unitarios del grafo de LangGraph**: Tests específicos para cada nodo (`extraction_node`, `sentiment_analysis_node`, `structuring_node`) y las funciones condicionales.
+- ❌ **Tests de flujo completo del grafo**: Validación del flujo end-to-end con diferentes estados y transiciones.
+
+### Tests de Integración
+
+⚠️ **ADVERTENCIA**: El test `test_full_flow_with_real_video` hace llamadas reales a:
+- YouTube (yt-dlp)
+- OpenAI API (Whisper + GPT)
+
+**Esto consume créditos de API y puede ser lento.** Para ejecutar solo tests unitarios sin integración:
+
+```bash
+uv run python manage.py test graph.tests.VideoAnalysisYoutubeAPITestCase --exclude-tag=integration
+uv run python manage.py test graph.tests.VideoAnalysisModelTestCase
+```
+
+---
+
+## 🚧 Mejoras Futuras
+
+Este proyecto fue desarrollado como prueba técnica y cumple con todos los requisitos solicitados. Sin embargo, existen mejoras que podrían implementarse en un entorno de producción:
+
+### 🔄 Persistencia de Estado de Agentes
+
+**Estado actual**: El sistema procesa cada video de forma independiente sin mantener contexto entre ejecuciones.
+
+**Mejora propuesta**: 
+- Implementar **LangGraph Checkpointing** para persistir el estado del grafo y permitir reanudar ejecuciones interrumpidas
+- Alternativa: Usar **Redis** como backend de persistencia para estados intermedios
+- Beneficio: Recuperación ante fallos, debugging mejorado, y posibilidad de flujos conversacionales
+
+**Justificación de no implementarlo**: 
+El flujo actual es lineal (no conversacional) y completa en una única ejecución, por lo que la persistencia de estado no aportaba valor al MVP. Para flujos de ida y vuelta con usuarios o procesos largos con múltiples reintentos, sería fundamental.
+
+### 🔐 Autenticación y Autorización
+
+**Estado actual**: Los endpoints son públicos y no requieren autenticación.
+
+**Mejora propuesta**:
+- **Opción 1**: Django Session Authentication (integrado con admin)
+- **Opción 2**: JWT (JSON Web Tokens) con `djangorestframework-simplejwt`
+- **Opción 3**: API Keys para integraciones externas
+- Implementar permisos por usuario (rate limiting, quotas de uso)
+
+**Justificación de no implementarlo**: 
+Para el alcance del challenge no se especificó la necesidad de autenticación. En producción sería crítico para:
+- Control de acceso y seguridad
+- Rate limiting por usuario
+- Tracking de uso y costos de API
+- Compliance y auditoría
+
+
+### 📊 Otras Mejoras Potenciales
+
+| Mejora | Descripción | Prioridad |
+|--------|-------------|-----------|
+| **Webhooks** | Notificaciones cuando el análisis finaliza (útil para videos largos) | Media |
+| **Queue System** | Celery + Redis para procesamiento asíncrono real | Alta |
+| **Caching** | Redis para cachear resultados de videos ya analizados | Media |
+| **Monitoring** | Sentry para error tracking, Prometheus para métricas | Alta |
+| **API Versioning** | `/api/v1/analyze/` para mantener compatibilidad | Baja |
+| **Bulk Processing** | Endpoint para analizar múltiples videos en batch | Media |
+| **Streaming Responses** | Server-Sent Events para progreso en tiempo real | Baja |
+
+---
+
+## 📝 Conclusión
+
+El proyecto implementa una solución completa y funcional que cumple con todos los requisitos del challenge:
+- ✅ Arquitectura de agentes con LangGraph
+- ✅ Extracción, análisis y estructuración de videos
+- ✅ Persistencia en PostgreSQL
+- ✅ Manejo robusto de errores
+- ✅ Clean code y buenas prácticas
+- ✅ Dockerización completa
+- ✅ Tests de casos principales
+
+Las mejoras sugeridas (persistencia de agentes, autenticación) son decisiones arquitectónicas conscientes que se omitieron por estar fuera del alcance del MVP, pero que están claramente identificadas y documentadas para implementación futura en un entorno productivo
