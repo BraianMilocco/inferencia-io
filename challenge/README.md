@@ -276,6 +276,14 @@ Lista los análisis previos de videos subidos (paginado).
 | 400 | Error de validación (URL inválida, archivo no MP4) |
 | 500 | Error interno durante el análisis |
 
+**Ejemplo de error por audio insuficiente** (500):
+```json
+{
+  "error": "Error during analysis",
+  "details": ["Audio not found or insufficient. Transcript too short: 1 words, 3 characters. Minimum required: 5 words or 10 characters."]
+}
+```
+
 ---
 
 ## 🗃 Modelo de Datos
@@ -399,7 +407,9 @@ class VideoAnalysisState(TypedDict):
   - Para YouTube: Descarga audio con `yt-dlp`, extrae metadata
   - Para uploads: Extrae audio con `FFmpeg`, obtiene duración con `ffprobe`
   - Transcribe con OpenAI Whisper API
+  - **Validación de transcripción**: Verifica que el transcript tenga al menos 5 palabras o 10 caracteres
 - **Salida**: `transcript`, `title`, `duration_seconds`, `language_code`
+- **Error si**: El transcript es demasiado corto (indica video sin audio o audio insuficiente)
 
 #### Nodo 2: Sentiment Analysis
 - **Entrada**: `transcript`
@@ -485,6 +495,7 @@ challenge/
 2. **Fail-fast con edges condicionales**: Si un nodo falla, no se ejecutan los siguientes
 3. **Cleanup de archivos temporales**: El audio temporal se elimina siempre (incluso en error)
 4. **Validación temprana**: Los serializers validan URL/archivo antes de procesar
+5. **Validación de audio insuficiente**: Si la transcripción es muy corta (< 5 palabras o < 10 caracteres), se retorna error `"Audio not found or insufficient"`. Esto previene que Whisper "alucine" texto en videos sin audio real
 
 ### Separación de Concerns
 

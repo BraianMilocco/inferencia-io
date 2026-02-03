@@ -61,6 +61,21 @@ class WhisperTranscriptionService:
         self.temp_dir = tempfile.gettempdir()
         logger.info("WhisperTranscriptionService initialized", extra={"temp_dir": self.temp_dir})
 
+    def transcription_is_too_short(self, transcript: str) -> bool:
+        """
+        Validates if the transcription is too short to be meaningful.
+        This is use so gpt and whisper don't waste resources on very short transcriptions.
+                
+        Args:
+            transcript (str): The transcription text
+        
+        Returns:
+            bool: True if the transcription is too short, False otherwise
+        """
+        if not transcript or len(transcript.strip()) < 5 or len(transcript.split(" ")) < 3:
+            return True
+        return False
+
     def delete_temp_file(self, file_path: str):
         """
         Deletes a temporary file.
@@ -199,7 +214,11 @@ class WhisperTranscriptionService:
                     file=audio_file,
                     response_format="verbose_json"
                 )
-            logger.info("Transcription completed", extra={"audio_path": audio_path})
+            logger.info(f"Transcription completed -> Transcript: {result.text}", extra={"audio_path": audio_path})
+            transcript = result.text if result.text else ""
+            if self.transcription_is_too_short(transcript):
+                logger.warning("Transcription too short", extra={"audio_path": audio_path})
+                return TranscriptAudioResponse(transcript=transcript, success=False, error="Transcription too short")
             return TranscriptAudioResponse(
                 transcript=result.text,
                 language_code=getattr(result, "language", None),

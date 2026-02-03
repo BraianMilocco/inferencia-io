@@ -20,7 +20,7 @@ def should_continue(state: VideoAnalysisState, status_end: list[str] = ["failed"
 # Even though both functions below do almost the same, they are separated for clarity and future modifications/customization
 def should_continue_after_extraction(state: VideoAnalysisState) -> str:
     """Decides whether to continue after the extraction node"""
-    return should_continue(state, status_end=["failed"])
+    return should_continue(state)
 
 def should_continue_after_sentiment(state: VideoAnalysisState) -> str:
     """Decides whether to continue after the sentiment analysis node"""

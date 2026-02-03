@@ -39,7 +39,7 @@ class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
                 errors=error_messages,
             )
             return Response(
-                serializer.errors,
+                {"error": error_messages},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -53,7 +53,12 @@ class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
             graph = create_video_analysis_graph()
             result = graph.invoke({"video_url": video_url})
             
-            process_graph_result(video_analysis, result, title=True)
+            success, details = process_graph_result(video_analysis, result, title=True)
+            if not success:
+                return Response(
+                    {"error": details['details']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             video_analysis.refresh_from_db()           
             # Return response
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
@@ -106,7 +111,7 @@ class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
                 errors=error_messages,
             )
             return Response(
-                serializer.errors,
+                {"error": error_messages},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -130,7 +135,12 @@ class VideoAnalysisUploadView(mixins.ListModelMixin, generics.GenericAPIView):
                 "video_path": temp_path,
             })
 
-            process_graph_result(video_analysis, result, title=False)
+            success, details = process_graph_result(video_analysis, result, title=False)
+            if not success:
+                return Response(
+                    {"error": details['details']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             video_analysis.refresh_from_db()
             response_serializer = VideoAnalysisResponseSerializer(video_analysis)
             return Response(

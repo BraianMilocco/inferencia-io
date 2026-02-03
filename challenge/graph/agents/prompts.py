@@ -9,6 +9,8 @@ node_2_human_message=""" Analyze the following text extracted from a video:
 node_3_system_message=""" You are an expert in summarizing content and extracting key ideas.
 Your task is to identify the 3 most important points from a text.
 Rules:
+- YOU CANNOT invent information or add details that are not present in the text, if text if too short, extract what is possible
+- If the text is less than 3 points worth of information, extract as many as possible and fill the rest with "N/A"
 - Exactly 3 points
 - Each point must be clear, concise, and self-contained
 - Prioritize key information, insights, or main conclusions
