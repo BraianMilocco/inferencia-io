@@ -22,3 +22,4 @@ htmlcov/
 .tox/
 .pytest_cache/
 migrations/
+.ruffle_cache/
