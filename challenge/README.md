@@ -637,21 +637,6 @@ Este proyecto fue desarrollado como prueba técnica y cumple con todos los requi
 **Justificación de no implementarlo**: 
 El flujo actual es lineal (no conversacional) y completa en una única ejecución, por lo que la persistencia de estado no aportaba valor al MVP. Para flujos de ida y vuelta con usuarios o procesos largos con múltiples reintentos, sería fundamental.
 
-```python
-# Ejemplo de implementación futura con LangGraph Checkpointing
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.postgres import PostgresSaver
-
-# Opción 1: En memoria (desarrollo)
-checkpointer = MemorySaver()
-
-# Opción 2: PostgreSQL (producción)
-checkpointer = PostgresSaver.from_conn_string("postgresql://...")
-
-graph = create_video_analysis_graph()
-compiled_graph = graph.compile(checkpointer=checkpointer)
-```
-
 ### 🔐 Autenticación y Autorización
 
 **Estado actual**: Los endpoints son públicos y no requieren autenticación.
@@ -669,18 +654,6 @@ Para el alcance del challenge no se especificó la necesidad de autenticación. 
 - Tracking de uso y costos de API
 - Compliance y auditoría
 
-```python
-# Ejemplo de implementación futura con JWT
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.authentication import JWTAuthentication
-
-class VideoAnalysisYoutubeView(mixins.ListModelMixin, generics.GenericAPIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-    
-    # Rate limiting por usuario
-    throttle_scope = 'video_analysis'
-```
 
 ### 📊 Otras Mejoras Potenciales
 
